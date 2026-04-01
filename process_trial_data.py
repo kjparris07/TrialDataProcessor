@@ -191,6 +191,7 @@ class TrialDataProcessor:
                         'Waiting_Time': self._calculate_waiting_time(row),
                         'Crossing_Time': self._calculate_crossing_time(row),
                         'Total_Trial_Time': self._calculate_total_time(row),
+                        'Timing_of_Entry': self._calculate_entry_time(row) or 'N/A',
                         
                         # Collision information
                         'Collision_Count': total_collisions,
@@ -274,6 +275,15 @@ class TrialDataProcessor:
         
         if exit_time is not None and first_car_time is not None:
             return round(exit_time - first_car_time, 2)
+        return None
+
+    def _calculate_entry_time(self, row) -> float:
+        """Calculate entry time: Pedestrian Road Enter Time - First eHMI On Time"""
+        enter_time = self._safe_float(row.get('Pedestrian_Enter_time', 'N/A'))
+        first_car_time = self._safe_float(row.get('First_Car_eHMI_ON_Time', 'N/A'))
+        
+        if enter_time is not None and first_car_time is not None:
+            return round(enter_time - first_car_time, 2)
         return None
     
     def _check_collision(self, row, car_type: str) -> str:
@@ -414,7 +424,6 @@ class TrialDataProcessor:
             for index, row in df.iterrows():
                 ehmi_label = f'eHMI {row['eHMI_Type']}' if row['eHMI_Type'] != 'N/A' else 'N/A'
                 row['eHMI_Type'] = ehmi_label
-                row['First_Car_eHMI_ON_Time'] = round(row['First_Car_eHMI_ON_Time'], 2) if row['Yield_Type'] == 'Yield' else 'N/A'
                 combined.append(row)
         
         combined_df = pd.DataFrame(combined)
@@ -427,9 +436,9 @@ class TrialDataProcessor:
             'Yield_Type',
             'eHMI_Type', 
             'Waiting_Time', 
+            'Timing_of_Entry',
             'Crossing_Time',
             'Total_Trial_Time',
-            'First_Car_eHMI_ON_Time',
             'Collision_Count'
         ]]
         part_df.to_csv(output_path, index=False)
