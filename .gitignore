@@ -1,0 +1,9 @@
+__pycache__/*
+venv/*
+Output/*
+Test_SP26_Output/*
+AllTrials_Allparticipants/*
+SP26_AllTrials_data/*
+Gender_Details.csv
+Gender_Details_sp26.csv
+build_log.txt
