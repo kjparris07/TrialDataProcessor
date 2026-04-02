@@ -53,7 +53,7 @@ class TrialDataProcessor:
     
     def __init__(self, data_dir: str, gender_file: str):
         self.data_dir = Path(data_dir)
-        self.gender_file = Path(gender_file)
+        self.gender_file = Path(gender_file) if gender_file != None else None
         self.gender_data = self._load_gender_data()
         self.trial_to_group = self._build_trial_to_group_map()
         
@@ -188,9 +188,9 @@ class TrialDataProcessor:
                         'Yield_Type': yield_type,
                         
                         # Timing columns
-                        'Waiting_Time': self._calculate_waiting_time(row),
-                        'Crossing_Time': self._calculate_crossing_time(row),
-                        'Total_Trial_Time': self._calculate_total_time(row),
+                        'Waiting_Time': self._calculate_waiting_time(row) or 'Invalid Trial Value',
+                        'Crossing_Time': self._calculate_crossing_time(row) or 'Invalid Trial Value',
+                        'Total_Trial_Time': self._calculate_total_time(row) or 'Invalid Trial Value',
                         'Timing_of_Entry': self._calculate_entry_time(row) or 'N/A',
                         
                         # Collision information
@@ -255,7 +255,7 @@ class TrialDataProcessor:
         enter_time = self._safe_float(row.get('Pedestrian_Enter_time', 'N/A'))
         first_car_time = self._safe_float(row.get('First_Car_Creation_Time', 'N/A'))
         
-        if enter_time is not None and first_car_time is not None:
+        if enter_time is not None and enter_time != -1 and first_car_time is not None:
             return round(enter_time - first_car_time, 2)
         return None
     
@@ -264,7 +264,7 @@ class TrialDataProcessor:
         exit_time = self._safe_float(row.get('Pedestrian_Exit_Time', 'N/A'))
         enter_time = self._safe_float(row.get('Pedestrian_Enter_time', 'N/A'))
         
-        if exit_time is not None and enter_time is not None:
+        if exit_time is not None and enter_time is not None and enter_time != exit_time:
             return round(exit_time - enter_time, 2)
         return None
     
@@ -273,7 +273,7 @@ class TrialDataProcessor:
         exit_time = self._safe_float(row.get('Pedestrian_Exit_Time', 'N/A'))
         first_car_time = self._safe_float(row.get('First_Car_Creation_Time', 'N/A'))
         
-        if exit_time is not None and first_car_time is not None:
+        if exit_time is not None and exit_time != -1 and first_car_time is not None:
             return round(exit_time - first_car_time, 2)
         return None
 
@@ -325,27 +325,28 @@ class TrialDataProcessor:
             total_post_coll_fail_trials = 0
 
             collision_passed = False
-            for index, row in df.iterrows():
-                if collision_passed:
-                    if row['Yield_Type'] == 'Yield':
-                        post_collision_yield_sum += row['Waiting_Time']
-                        total_post_coll_yield_trials += 1
-                    elif row['Yield_Type'] == 'No Yield':
-                        post_collision_no_yield_sum += row['Waiting_Time']
-                        total_post_coll_no_yield_trials += 1
+            for _, row in df.iterrows():
+                if row['Waiting_Time'] != 'Invalid Trial Value':
+                    if collision_passed:
+                        if row['Yield_Type'] == 'Yield':
+                            post_collision_yield_sum += row['Waiting_Time']
+                            total_post_coll_yield_trials += 1
+                        elif row['Yield_Type'] == 'No Yield':
+                            post_collision_no_yield_sum += row['Waiting_Time']
+                            total_post_coll_no_yield_trials += 1
+                        else:
+                            post_collision_fail_sum += row['Waiting_Time']
+                            total_post_coll_fail_trials += 1
                     else:
-                        post_collision_fail_sum += row['Waiting_Time']
-                        total_post_coll_fail_trials += 1
-                else:
-                    if row['Yield_Type'] == 'Yield':
-                        pre_collision_yield_sum += row['Waiting_Time']
-                        total_pre_coll_yield_trials += 1
-                    elif row['Yield_Type'] == 'No Yield':
-                        pre_collision_no_yield_sum += row['Waiting_Time']
-                        total_pre_coll_no_yield_trials += 1
-                    else:
-                        pre_collision_fail_sum += row['Waiting_Time']
-                        total_pre_coll_fail_trials += 1
+                        if row['Yield_Type'] == 'Yield':
+                            pre_collision_yield_sum += row['Waiting_Time']
+                            total_pre_coll_yield_trials += 1
+                        elif row['Yield_Type'] == 'No Yield':
+                            pre_collision_no_yield_sum += row['Waiting_Time']
+                            total_pre_coll_no_yield_trials += 1
+                        else:
+                            pre_collision_fail_sum += row['Waiting_Time']
+                            total_pre_coll_fail_trials += 1
                 
                 if row['Collision_Count'] > 0:
                     collision_passed = True
@@ -396,7 +397,9 @@ class TrialDataProcessor:
             print("WARNING: No data was processed for zero collisions!")
 
         # File 2: One Collision CSV
-        if len(ONE_COLLISION) > 0:
+        if len(
+            
+            ONE_COLLISION) > 0:
             print(f"\nTotal one collision participants: {len(ONE_COLLISION)}")
             one_collision_path = output_path.parent / f"{output_path.stem}_one_coll{output_path.suffix}"
             self._generate_collision_csv(ONE_COLLISION, one_collision_path)
@@ -421,7 +424,7 @@ class TrialDataProcessor:
         """Generate Collision CSV, all 36 trials per participant"""
         combined = []
         for df in list:
-            for index, row in df.iterrows():
+            for _, row in df.iterrows():
                 ehmi_label = f'eHMI {row['eHMI_Type']}' if row['eHMI_Type'] != 'N/A' else 'N/A'
                 row['eHMI_Type'] = ehmi_label
                 combined.append(row)
@@ -469,16 +472,17 @@ class TrialDataProcessor:
             fail_wait_sum = 0.0
             total_fail_trials = 0
 
-            for index, row in df.iterrows():
-                if row['Yield_Type'] == 'Yield':
-                    yield_wait_sum += row['Waiting_Time']
-                    total_yield_trials += 1
-                elif row['Yield_Type'] == 'No Yield':
-                    no_yield_wait_sum += row['Waiting_Time']
-                    total_no_yield_trials += 1
-                else:
-                    fail_wait_sum += row['Waiting_Time']
-                    total_fail_trials += 1
+            for _, row in df.iterrows():
+                if row['Waiting_Time'] != 'Invalid Trial Value' and row['Waiting_Time'] >= 0:
+                    if row['Yield_Type'] == 'Yield':
+                        yield_wait_sum += row['Waiting_Time']
+                        total_yield_trials += 1
+                    elif row['Yield_Type'] == 'No Yield':
+                        no_yield_wait_sum += row['Waiting_Time']
+                        total_no_yield_trials += 1
+                    else:
+                        fail_wait_sum += row['Waiting_Time']
+                        total_fail_trials += 1
 
             yield_avg = round(yield_wait_sum / float(total_yield_trials), 2) if total_yield_trials != 0 else 'N/A'
             no_yield_avg = round(no_yield_wait_sum / float(total_no_yield_trials), 2) if total_no_yield_trials != 0 else 'N/A'
@@ -513,6 +517,7 @@ def main():
     
     # Output files
     output_detailed = base_dir / "Test_SP26_Output" / "processed_data.csv"
+    # output_detailed = base_dir / "Output" / "processed_data.csv"
     
     print("=" * 60)
     print("TRIAL DATA PROCESSING SCRIPT")
